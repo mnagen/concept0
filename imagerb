@@ -1,0 +1,41 @@
+name: Deploy Docker Image to EC2
+ 
+on:
+  workflow_dispatch:
+    inputs:
+      docker_image:
+        description: "Docker image to deploy"
+        required: true
+        default: "my-docker-image:latest"  # replace with your default image
+ 
+jobs:
+  deploy:
+    name: Deploy Docker Image to EC2 via SSM
+    runs-on: ubuntu-latest
+ 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+ 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1  # specify your AWS region
+ 
+      - name: Deploy Docker Image to EC2
+        id: deploy
+        run: |
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets '[{"Key":"InstanceIds","Values":["YOUR_EC2_INSTANCE_ID"]}]' \
+            --parameters 'commands=[
+              "docker pull ${{ github.event.inputs.docker_image }}",
+              "docker stop my-container || true",
+              "docker rm my-container || true",
+              "docker run -d --name my-container ${{ github.event.inputs.docker_image }}"
+            ]' \
+            --comment "Deploying Docker image to EC2" \
+            --output text \
+            --query "Command.CommandId"
